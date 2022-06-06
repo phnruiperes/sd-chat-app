@@ -1,25 +1,24 @@
-const path = require('path')
-const http = require('http')
-const express = require('express')
-const socketio = require('socket.io')
+const Peer = require('fully-connected-topology')
+const StreamSet = require('stream-set') 
+const JSONstream = require('duplex-json-stream')
+const myConn = process.argv[2]
+const otherConn = process.argv.slice(3)
 
-const app = express()
-const server = http.createServer(app)
-const io = socketio(server)
-//Server para socket.io
+const streamset = StreamSet()
+const peer = Peer(myConn, otherConn)
 
-const port = process.env.PORT || 3000
-const publicDirectoryPath = path.join(__dirname,'../public')
-
-app.use(express.static(publicDirectoryPath))
-//Pega o conteúdo do HTML
-
-io.on('connection', () => {
-    console.log('New WebSocket connection')
+peer.on('connection', function(conn,connectedTo){
+    console.log('Connected successfully to : ',connectedTo)
+    conn = JSONstream(conn)   // Stream para leitura e escrita
+    streamset.add(conn)
+    conn.on('data', function(data){
+        console.log(data.message)
+    })
 })
-//Nova conexão
-
-server.listen(port, () => {
-    console.log(`Server is up on port ${port}!`)
+ 
+// Escutar as mensagens no terminal
+process.stdin.on('data', function(data){
+    streamset.forEach(function(conn){
+        conn.write({message: data.toString()})
+    })
 })
-//Server rodando na porta 3000
