@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>   
+        <script>
+            const SIGNALING_SERVER = 'http://localhost:3000'
+            // const SIGNALING_SERVER = window.location.protocol + '://' + window.location.hostname + (window.location.port ? ":" + window.location.port : "")
+            const ICE_SERVERS = [{ urls:["stun:stun.l.google.com:19302",
+                                        // "stun:stun1.l.google.com:19302",
+                                        // "stun:stun2.l.google.com:19302" 
+                                    ]}]
+            // Default channel (or ROOM)
+            const DEFAULT_CHANNEL = 'MAIN_ROOM'
+            let LOCAL_CHANNEL = null
+            let REMOTE_CHANNEL = null
+        </script>
+
+        <script>
+        let signalingSocket = null
+        let peers = {}  
+        let thisID = null
+        // Function to be executed when user enter
+        function onInit(){
+            let peerConnection, remotePeerConn = null
+            console.log('Connecting to server')
+            // signalingSocket = io(SIGNALING_SERVER)
+            signalingSocket = io()
+            // When user connects
+            signalingSocket.on('connect', function() {
+            // console.log("Connected to signaling server") 
+            signalingSocket.emit('join', {'channel': DEFAULT_CHANNEL})
+            })
+            // When user disconnects
+            signalingSocket.on('disconnect', function(user){
+                console.log('User', user ,'disconnected from server')
+                // Remove every PEER connection it has
+                for (peer_id in peers) {
+                    peers[peer_id].close() 
+                }
+                // Reset PEERS list
+                peers = {} 
+            })
+
+            signalingSocket.on('myID', function(id){
+                document.getElementById('user-info').innerHTML = 'User connected - ID: ' + id 
+                thisID = id
+            })
+
+            signalingSocket.on('peersConnected', function(peers){
+                document.getElementById('user-count').innerHTML = 'Users connected - ' + peers
+            })
+
+            // Adding a new peer to another one when it gets connected to server
+            signalingSocket.on('addPeer', function(configuration){
+                console.log('New peer being added to list', configuration)
+                const peerID = configuration.peer_id
+                // Establish RTCPeerConnection
+                peerConnection = new RTCPeerConnection(
+                     {"iceServers": ICE_SERVERS},
+                )
+                
+                peers[peerID] = peerConnection 
+
+                peerConnection.onicecandidate = function(event) {
+                        console.log('OnIceCandidate executing...')
+                        if (!event || !event.candidate) return
+                        console.log('Relaying ICE candidate', event)
+                            // Signaling server emit relayICECandidate function
+                            // signalingSocket.emit('relayICEcandidate', {
+                            //     'peer_id': peerID, 
+                            //     'ice_candidate': {
+                            //         'sdpMLineIndex': event.candidate.sdpMLineIndex,
+                            //         'candidate': event.candidate.candidate
+                            //     }
+                            // }) 
+                            signalingSocket.emit('relayICEcandidate', {
+                                "peer_id": peerID,
+                                "ice_candidate": event.candidate
+                            })                        
+                    }
+                    
+                    
+                    if (configuration.should_create_offer) {
+                        LOCAL_CHANNEL = peerConnection.createDataChannel('TextChannel')
+                        
+                        LOCAL_CHANNEL.onopen = function(){
+                            console.log('OFFERER DATACHANNEL OPEN')
+                        }
+                        // Only one PEER makes an OFFER at a time
+                        console.log("Creating RTC offer to ", peerID) 
+                        // Create data channel for communication
+                        
+                            peerConnection.createOffer().then(function(offer){
+                                console.log('Creating offer to ', peerID)
+                                peerConnection.setLocalDescription(offer).then(
+                                    function(){
+                                    signalingSocket.emit('relaySessionDescription',{'peer_id': peerID, 'session_description': offer})
+                                    } )
+                            })
+                    
+                    
+                    }
+                    LOCAL_CHANNEL.onmessage = function(message){
+                            console.log(JSON.stringify(message.data),'is the message')
+                            addMessage(JSON.parse(message.data))
+                        }
+                    
+
+            })
+
+            signalingSocket.on('sessionDescriptionFunction',  function(configuration) {
+                    console.log('Remote description received: ', configuration) 
+                    const peerID = configuration.peer_id 
+                    const peer = peers[peerID] 
+                    const remoteDescription = configuration.session_description 
+                    // console.log(configuration.session_description) 
+
+                    remotePeerConn = new RTCPeerConnection(
+                         {"iceServers": ICE_SERVERS}
+                        )
+
+                    remotePeerConn.onicecandidate = function(event) {
+                        console.log('OnIceCandidate executing...')
+                        if (!event || !event.candidate) return
+                        console.log('Relaying ICE candidate', event)
+                            // Signaling server emit relayICECandidate function
+                            // signalingSocket.emit('relayICEcandidate', {
+                            //     'peer_id': peerID, 
+                            //     'ice_candidate': {
+                            //         'sdpMLineIndex': event.candidate.sdpMLineIndex,
+                            //         'candidate': event.candidate.candidate
+                            //     }
+                            // }) 
+                            signalingSocket.emit('relayICEcandidate', {
+                                "peer_id": peerID,
+                                "ice_candidate": event.candidate
+                            })
+                    }
+                    remotePeerConn.ondatachannel = function(event){
+                        LOCAL_CHANNEL = event.channel
+                        LOCAL_CHANNEL.onopen = function(){
+                            console.log('RECEIVE DATACHANNEL OPEN')
+                        }
+                        LOCAL_CHANNEL.onmessage = function(message){
+                            console.log(JSON.stringify(message.data),'is the message')
+                            addMessage(JSON.parse(message.data))
+                        }
+                        remotePeerConn.channel = LOCAL_CHANNEL
+                    }
+                    if(remoteDescription.type == 'offer'){
+                        remotePeerConn.setRemoteDescription(remoteDescription).then(()=> console.log('REMOTE DESCRIPTION RECEIVED AND SETTED', JSON.stringify(remoteDescription)))
+                        remotePeerConn.createAnswer().then(
+                            function(answer){
+                            remotePeerConn.setLocalDescription(answer).then(
+                                function(){
+                                signalingSocket.emit('relaySessionDescription', {'peer_id': peerID, 'session_description': answer})
+                                }
+                            )
+                        })
+
+                    }else if (remoteDescription.type == 'answer'){
+                        peerConnection.setRemoteDescription(remoteDescription).then(()=> console.log('REMOTE DESCRIPTION LOCAL ', remoteDescription))
+                    }
+                }) 
+                // Find the best way to get to another peer on the net
+                signalingSocket.on('iceCandidateFunction',  function(config) {
+                    const peer = peers[config.peer_id] 
+                    const iceCandidate = config.ice_candidate 
+                    if(iceCandidate){
+                    peer.addIceCandidate(iceCandidate) 
+                    }
+                }) 
+
+                signalingSocket.on('removePeer', function(config) {
+                    console.log('Signaling server said to remove peer:', config);
+                    const peerID = config.peer_id;
+                   
+                    if (peerID in peers) {
+                        peers[peerID].close();
+                    }
+
+                    delete peers[peerID];
+                })
+        }
+
+        
+        
+        </script>
+
+        <script>
+            addMessage = function(userData){
+            const list = document.getElementById('message-list')
+            if(userData.message){
+            list.appendChild(document.createElement('li').appendChild(document.createTextNode(userData.user + ":" + userData.message)))
+            list.appendChild(document.createElement('br'))
+                }
+            }
+            sendMessage = function(message){
+            const userData = {
+                "user": thisID,
+                "message": message
+            } 
+            console.log(userData)
+            addMessage(userData)
+            LOCAL_CHANNEL.send(JSON.stringify(userData))
+            document.getElementById('user-message')['value'] = ''
+            }
+        
+
+        </script>
+
+
+    </head>
+    <body onload="onInit()">
+    <h1> CHAT </h1>
+    <h4 id="user-info"> Connecting user... </h4>
+    <h5 id="user-count"></h5>
+    <input type="text" id="user-message">
+    <input type="submit" value="Enviar" onclick="sendMessage(document.getElementById('user-message')['value'])">
+    <div>
+        <ul id="message-list">
+        </ul>
+    </div>
+    </body>
+
+</html>

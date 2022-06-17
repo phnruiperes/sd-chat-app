@@ -15,8 +15,14 @@
     "express": "^4.16.4",
     "fully-connected-topology": "^1.1.1",
     "gun": "^0.2020.1237",
-    "socket.io": "^2.2.0",
-    "stream-set": "^1.1.0"
+    "icebreaker.io": "^1.0.0",
+    "ip": "^1.1.8",
+    "simple-peer": "^9.11.1",
+    "socket.io": "^2.4.1",
+    "stream-set": "^1.1.0",
+    "websocket": "^1.0.34",
+    "wrtc": "^0.4.7",
+    "ws": "^8.7.0"
   },
   "devDependencies": {
     "@types/node": "^17.0.40",
