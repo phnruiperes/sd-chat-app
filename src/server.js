@@ -1,5 +1,6 @@
 const http = require('http')
 const express = require('express')
+const path = require('path')
 const PORT = 3000
 // Array with all active connections
 const connectionPeers = {}
@@ -12,6 +13,7 @@ const socketIO = require('socket.io').listen(server)
 server.listen(PORT, null, function(){
     console.log('Server listening on PORT', PORT)
 })
+app.use(express.static(path.join(__dirname,"../public")))
 app.get('/', function(req, res){ res.sendFile(__dirname + '/client.html')  }) 
 
 sendPeersCount = function(){
@@ -73,7 +75,10 @@ socketIO.sockets.on('connection', function(socket){
 
     socket.on('part', part)
 
-
+    // Change current ID
+    socket.on('changeID', function(id){
+        socket.id = id
+    })
 
     // Relay IP/PORT data to all other users at the chat
     socket.on('relayICEcandidate', function(configuration){
