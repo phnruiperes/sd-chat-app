@@ -7,7 +7,8 @@
         <script>
             const SIGNALING_SERVER = 'http://localhost:3000'
             // const SIGNALING_SERVER = window.location.protocol + '://' + window.location.hostname + (window.location.port ? ":" + window.location.port : "")
-            const ICE_SERVERS = [{ urls:["stun:stun.l.google.com:19302",
+            const ICE_SERVERS = [{ urls:[
+                                        //"stun:stun.l.google.com:19302",
                                         // "stun:stun1.l.google.com:19302",
                                         // "stun:stun2.l.google.com:19302" 
                                     ]}]
@@ -36,12 +37,12 @@
             // When user disconnects
             signalingSocket.on('disconnect', function(user){
                 console.log('User', user ,'disconnected from server')
-                // Remove every PEER connection it has
-                for (peer_id in peers) {
-                    peers[peer_id].close() 
-                }
-                // Reset PEERS list
-                peers = {} 
+                // Remove every PEER connection it has ('IF DISABLED, WEBRTC KEEP ITS CONNECTION ALIVE')
+                // for (peer_id in peers) {
+                //     peers[peer_id].close() 
+                // }
+                // // Reset PEERS list
+                // peers = {} 
             })
 
             signalingSocket.on('myID', function(id){
@@ -74,7 +75,7 @@
                 const peerID = configuration.peer_id
                 // Establish RTCPeerConnection
                 peerConnection = new RTCPeerConnection(
-                     {"iceServers": ICE_SERVERS},
+                    //  {"iceServers": ICE_SERVERS},
                 )
                 
                 peers[peerID] = peerConnection 
@@ -83,14 +84,6 @@
                         console.log('OnIceCandidate executing...')
                         if (!event || !event.candidate) return
                         console.log('Relaying ICE candidate', event)
-                            // Signaling server emit relayICECandidate function
-                            // signalingSocket.emit('relayICEcandidate', {
-                            //     'peer_id': peerID, 
-                            //     'ice_candidate': {
-                            //         'sdpMLineIndex': event.candidate.sdpMLineIndex,
-                            //         'candidate': event.candidate.candidate
-                            //     }
-                            // }) 
                             signalingSocket.emit('relayICEcandidate', {
                                 "peer_id": peerID,
                                 "ice_candidate": event.candidate
@@ -134,7 +127,7 @@
                     // console.log(configuration.session_description) 
 
                     remotePeerConn = new RTCPeerConnection(
-                         {"iceServers": ICE_SERVERS}
+                        //  {"iceServers": ICE_SERVERS}
                         )
 
                     remotePeerConn.onicecandidate = function(event) {

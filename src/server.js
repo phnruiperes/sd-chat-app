@@ -30,9 +30,9 @@ socketIO.sockets.on('connection', function(socket){
     // When user disconnect 
     socket.on('disconnect', function(){
         console.log(socket.id,'disconnected')
-        for(const channel in socket.channels){
-            part(channel)
-        }
+        // for(const channel in socket.channels){
+        //     part(channel)
+        // }
         sendPeersCount()
         // Delete user from list
         delete connectionPeers[socket.id]
@@ -55,25 +55,25 @@ socketIO.sockets.on('connection', function(socket){
         channels[channel][socket.id] = socket 
         socket.channels[channel] = channel 
     }) 
+    // 'Remove' user from channel
+    // function part(channel) {
+    //     console.log("["+ socket.id + "] part ");
 
-    function part(channel) {
-        console.log("["+ socket.id + "] part ");
+    //     if (!(channel in socket.channels)) {
+    //         console.log("["+ socket.id + "] ERROR: not in ", channel);
+    //         return;
+    //     }
 
-        if (!(channel in socket.channels)) {
-            console.log("["+ socket.id + "] ERROR: not in ", channel);
-            return;
-        }
+    //     delete socket.channels[channel];
+    //     delete channels[channel][socket.id];
 
-        delete socket.channels[channel];
-        delete channels[channel][socket.id];
+    //     for (id in channels[channel]) {
+    //         channels[channel][id].emit('removePeer', {'peer_id': socket.id});
+    //         socket.emit('removePeer', {'peer_id': id});
+    //     }
+    // }
 
-        for (id in channels[channel]) {
-            channels[channel][id].emit('removePeer', {'peer_id': socket.id});
-            socket.emit('removePeer', {'peer_id': id});
-        }
-    }
-
-    socket.on('part', part)
+    // socket.on('part', part)
 
     // Change current ID
     socket.on('changeID', function(id){
