@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <link rel="stylesheet" type="text/css" href="../css/main.css">
         <script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>   
+        <title> WEBRTC Chat </title>
         <script>
             const SIGNALING_SERVER = 'http://localhost:3000'
             // const SIGNALING_SERVER = window.location.protocol + '://' + window.location.hostname + (window.location.port ? ":" + window.location.port : "")
@@ -13,10 +15,11 @@
             const DEFAULT_CHANNEL = 'MAIN_ROOM'
             let LOCAL_CHANNEL = null
             let REMOTE_CHANNEL = null
+            let signalingSocket = null
         </script>
 
         <script>
-        let signalingSocket = null
+        // let signalingSocket = null
         let peers = {}  
         let thisID = null
         // Function to be executed when user enter
@@ -42,7 +45,22 @@
             })
 
             signalingSocket.on('myID', function(id){
-                document.getElementById('user-info').innerHTML = 'User connected - ID: ' + id 
+                const contentDiv = document.getElementById('user-info') 
+                document.getElementById('user-status').innerHTML = 'User connected - ID:'
+                const inputID = !document.getElementById('inputid') ? document.createElement('input') : null
+                inputID.id = 'inputid'
+                inputID.type = 'text'
+                inputID.value = id
+                inputID.readOnly = "true"
+                inputID.disabled = 'true'
+                const editID = !document.getElementById('editid') ? document.createElement('input') : null
+                editID.id = 'editid'
+                editID.type = 'submit'
+                editID.value = 'Edit ID'
+                editID.onclick = function(){changeMyId(inputID.value)}
+                contentDiv.appendChild(inputID)
+                contentDiv.appendChild(editID)
+                
                 thisID = id
             })
 
@@ -188,13 +206,30 @@
         </script>
 
         <script>
+            // Add message to client view
             addMessage = function(userData){
             const list = document.getElementById('message-list')
+            const isItMe = userData.user === thisID 
             if(userData.message){
-            list.appendChild(document.createElement('li').appendChild(document.createTextNode(userData.user + ":" + userData.message)))
-            list.appendChild(document.createElement('br'))
+            const newMessageDiv = document.createElement('div')
+            const textDiv = document.createElement('div')
+            textDiv.className = 'text'
+            newMessageDiv.className = 'message-tile'
+            newMessageDiv.id = userData.user === thisID ? 'my-message' : 'receive-message'
+            let sender = document.createTextNode((isItMe ? 'Me' : userData.user))
+            let messageText =document.createTextNode(userData.message)
+            textDiv.appendChild(messageText)
+            newMessageDiv.appendChild(sender)
+            newMessageDiv.appendChild(document.createElement('hr'))
+            newMessageDiv.appendChild(textDiv)
+            // newItem.appendChild(newMessageDiv)
+            list.appendChild(newMessageDiv)
+            // list.appendChild(document.createElement('br'))
+            newMessageDiv.scrollIntoView()
                 }
+            
             }
+            // Send message across data channel
             sendMessage = function(message){
             const userData = {
                 "user": thisID,
@@ -205,6 +240,19 @@
             LOCAL_CHANNEL.send(JSON.stringify(userData))
             document.getElementById('user-message')['value'] = ''
             }
+            // Change User's ID 
+            changeMyId = function(newID){
+                const inputid = document.getElementById('inputid')
+                const editid = document.getElementById('editid')
+                inputid.hasAttribute('readonly') ? inputid.removeAttribute('readonly') : inputid.readOnly = 'true'
+                inputid.hasAttribute('disabled') ? inputid.removeAttribute('disabled') : inputid.disabled = 'true'
+                inputid.hasAttribute('readonly') ? editid.value = 'Edit ID' : editid.value = 'Ok'
+                if(thisID != inputid.value){
+                console.log('MEU ID MUDOU!')
+                thisID = newID
+                signalingSocket.emit('changeID', newID)
+                }
+            }
         
 
         </script>
@@ -212,14 +260,22 @@
 
     </head>
     <body onload="onInit()">
-    <h1> CHAT </h1>
-    <h4 id="user-info"> Connecting user... </h4>
-    <h5 id="user-count"></h5>
-    <input type="text" id="user-message">
-    <input type="submit" value="Enviar" onclick="sendMessage(document.getElementById('user-message')['value'])">
-    <div>
-        <ul id="message-list">
-        </ul>
+
+    <div id="header">
+        <h1> CHAT </h1>
+        <h5 id="user-count"></h5>
+    </div>
+    <div id='user-info'>
+        <h4 id="user-status"> Connecting user... </h4>
+
+    </div>    
+    <div id="message-body">
+            <div id="message-list">
+            </div>
+        <div id="send-message">
+            <input type="text" id="user-message">
+            <input type="submit" value="Send" onclick="sendMessage(document.getElementById('user-message')['value'])">
+        </div>
     </div>
     </body>
 
