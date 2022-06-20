@@ -1,6 +1,7 @@
 const http = require('http')
 const express = require('express')
 const path = require('path')
+const { isObject } = require('util')
 const PORT = 3000
 // Array with all active connections
 const connectionPeers = {}
@@ -30,6 +31,7 @@ socketIO.sockets.on('connection', function(socket){
     // When user disconnect 
     socket.on('disconnect', function(){
         console.log(socket.id,'disconnected')
+        socket.removeAllListeners()
         // for(const channel in socket.channels){
         //     part(channel)
         // }
@@ -41,17 +43,21 @@ socketIO.sockets.on('connection', function(socket){
     
 
     socket.on('join', function (config) {
-        console.log("["+ socket.id + "] joined on ", config) 
+        // console.log("["+ socket.id + "] joined on ", config) 
         const channel = config.channel 
         if (!(channel in channels)) {
             channels[channel] = {} 
         }
 
         // AddPeer for every Peer already on this channel
-        for (id in channels[channel]) {
-            channels[channel][id].emit('addPeer', {'peer_id': socket.id, 'should_create_offer': false}) 
-            socket.emit('addPeer', {'peer_id': id, 'should_create_offer': true}) 
+        for (conn in channels[channel]) {
+            channels[channel][conn].emit('addPeer', {'peer_id': socket.id, 'should_create_offer': false}) 
+            socket.emit('addPeer', {'peer_id': conn, 'should_create_offer': true}) 
         }
+        // if(channels[channel]){
+        //     // Case it's the first to connect
+        //     socket.emit('addPeer',{'should_create_offer': true} )
+        // }
         channels[channel][socket.id] = socket 
         socket.channels[channel] = channel 
     }) 
@@ -84,8 +90,8 @@ socketIO.sockets.on('connection', function(socket){
     socket.on('relayICEcandidate', function(configuration){
         const peerID = configuration.peer_id
         const iceCandidate = configuration.ice_candidate
-        console.log("["+ socket.id + "] relaying ICE candidate to [" + peerID + "] ", iceCandidate)
-        console.log('CONFIGURATION', configuration)
+        // console.log("["+ socket.id + "] relaying ICE candidate to [" + peerID + "] ", iceCandidate)
+        // console.log('CONFIGURATION', configuration)
         if(peerID in connectionPeers){
             connectionPeers[peerID].emit('iceCandidateFunction', {'peer_id':socket.id, 'ice_candidate': iceCandidate})
         }
@@ -94,10 +100,20 @@ socketIO.sockets.on('connection', function(socket){
     socket.on('relaySessionDescription', function(config) {
         const peerID = config.peer_id 
         const sessionDescription = config.session_description 
-        console.log("["+ socket.id + "] relaying session description to [" + peerID + "] ", sessionDescription) 
+        // console.log("["+ socket.id + "] relaying session description to [" + peerID + "] ", sessionDescription) 
         if (peerID in connectionPeers) {
             connectionPeers[peerID].emit('sessionDescriptionFunction', {'peer_id': socket.id, 'session_description': sessionDescription}) 
         }
     }) 
+
+    // function sendHeartBeat(){
+    //     console.log('Pong')
+    //     socket.emit('ping',{beat:1})
+    // }
+
+    // socket.on('pong', function(data){
+    //     console.log('Pong received')
+    // })
+    // setTimeout(sendHeartBeat, 2000)
 
 })

@@ -33,6 +33,7 @@
             signalingSocket.on('connect', function() {
             // console.log("Connected to signaling server") 
             signalingSocket.emit('join', {'channel': DEFAULT_CHANNEL})
+            
             })
             // When user disconnects
             signalingSocket.on('disconnect', function(user){
@@ -44,6 +45,11 @@
                 // // Reset PEERS list
                 // peers = {} 
             })
+
+            // signalingSocket.on('ping', function(data){
+            //     console.log('Ping')
+            //     signalingSocket.emit('pong',{beat:1 })
+            // })
 
             signalingSocket.on('myID', function(id){
                 const contentDiv = document.getElementById('user-info') 
@@ -95,7 +101,7 @@
                         LOCAL_CHANNEL = peerConnection.createDataChannel('TextChannel')
                         
                         LOCAL_CHANNEL.onopen = function(){
-                            console.log('OFFERER DATACHANNEL OPEN')
+                            console.log('LOCAL DATACHANNEL OPEN')
                         }
                         // Only one PEER makes an OFFER at a time
                         console.log("Creating RTC offer to ", peerID) 
@@ -153,7 +159,7 @@
                             console.log('RECEIVE DATACHANNEL OPEN')
                         }
                         LOCAL_CHANNEL.onmessage = function(message){
-                            console.log(JSON.stringify(message.data),'is the message')
+                            // console.log(JSON.stringify(message.data),'is the message')
                             addMessage(JSON.parse(message.data))
                         }
                         remotePeerConn.channel = LOCAL_CHANNEL
