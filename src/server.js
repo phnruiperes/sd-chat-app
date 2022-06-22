@@ -32,13 +32,15 @@ socketIO.sockets.on('connection', function(socket){
     socket.on('disconnect', function(){
         console.log(socket.id,'disconnected')
         socket.removeAllListeners()
-        // for(const channel in socket.channels){
-        //     part(channel)
-        // }
+        for(const channel in socket.channels){
+            part(channel)
+        }
+        
         sendPeersCount()
         // Delete user from list
         delete connectionPeers[socket.id]
     })
+    socket.on('end', ()=> socket.disconnect(0))
     sendPeersCount()
     
 
@@ -62,24 +64,24 @@ socketIO.sockets.on('connection', function(socket){
         socket.channels[channel] = channel 
     }) 
     // 'Remove' user from channel
-    // function part(channel) {
-    //     console.log("["+ socket.id + "] part ");
+    function part(channel) {
+        console.log("["+ socket.id + "] part ");
 
-    //     if (!(channel in socket.channels)) {
-    //         console.log("["+ socket.id + "] ERROR: not in ", channel);
-    //         return;
-    //     }
+        if (!(channel in socket.channels)) {
+            console.log("["+ socket.id + "] ERROR: not in ", channel);
+            return;
+        }
 
-    //     delete socket.channels[channel];
-    //     delete channels[channel][socket.id];
+        delete socket.channels[channel];
+        delete channels[channel][socket.id];
 
-    //     for (id in channels[channel]) {
-    //         channels[channel][id].emit('removePeer', {'peer_id': socket.id});
-    //         socket.emit('removePeer', {'peer_id': id});
-    //     }
-    // }
+        for (id in channels[channel]) {
+            channels[channel][id].emit('removePeer', {'peer_id': socket.id});
+            socket.emit('removePeer', {'peer_id': id});
+        }
+    }
 
-    // socket.on('part', part)
+    socket.on('part', part)
 
     // Change current ID
     socket.on('changeID', function(id){
@@ -87,22 +89,23 @@ socketIO.sockets.on('connection', function(socket){
     })
 
     // Relay IP/PORT data to all other users at the chat
-    socket.on('relayICEcandidate', function(configuration){
+    socket.on('relayICEcandidate', async function(configuration){
+        console.log('RECEIVED CONFIG CANDIDATE', configuration)
         const peerID = configuration.peer_id
         const iceCandidate = configuration.ice_candidate
         // console.log("["+ socket.id + "] relaying ICE candidate to [" + peerID + "] ", iceCandidate)
         // console.log('CONFIGURATION', configuration)
         if(peerID in connectionPeers){
-            connectionPeers[peerID].emit('iceCandidateFunction', {'peer_id':socket.id, 'ice_candidate': iceCandidate})
+            await connectionPeers[peerID].emit('iceCandidateFunction', {'peer_id':socket.id, 'ice_candidate': iceCandidate})
         }
     })
 
-    socket.on('relaySessionDescription', function(config) {
+    socket.on('relaySessionDescription', async function(config) {
         const peerID = config.peer_id 
         const sessionDescription = config.session_description 
         // console.log("["+ socket.id + "] relaying session description to [" + peerID + "] ", sessionDescription) 
         if (peerID in connectionPeers) {
-            connectionPeers[peerID].emit('sessionDescriptionFunction', {'peer_id': socket.id, 'session_description': sessionDescription}) 
+            await connectionPeers[peerID].emit('sessionDescriptionFunction', {'peer_id': socket.id, 'session_description': sessionDescription}) 
         }
     }) 
 

@@ -8,7 +8,7 @@
             const SIGNALING_SERVER = 'http://localhost:3000'
             // const SIGNALING_SERVER = window.location.protocol + '://' + window.location.hostname + (window.location.port ? ":" + window.location.port : "")
             const ICE_SERVERS = [{ urls:[
-                                        //"stun:stun.l.google.com:19302",
+                                        "stun:stun.l.google.com:19302",
                                         // "stun:stun1.l.google.com:19302",
                                         // "stun:stun2.l.google.com:19302" 
                                     ]}]
@@ -21,11 +21,12 @@
 
         <script>
         // let signalingSocket = null
-        let peers = {}  
         let thisID = null
         // Function to be executed when user enter
         function onInit(){
-            let peerConnection, remotePeerConn = null
+        let peerConnection, remotePeerConn = null
+        let peers = {}  
+            
             console.log('Connecting to server')
             // signalingSocket = io(SIGNALING_SERVER)
             signalingSocket = io()
@@ -38,6 +39,7 @@
             // When user disconnects
             signalingSocket.on('disconnect', function(user){
                 console.log('User', user ,'disconnected from server')
+                signalingSocket.emit('end')
                 // Remove every PEER connection it has ('IF DISABLED, WEBRTC KEEP ITS CONNECTION ALIVE')
                 // for (peer_id in peers) {
                 //     peers[peer_id].close() 
@@ -76,84 +78,80 @@
             })
 
             // Adding a new peer to another one when it gets connected to server
-            signalingSocket.on('addPeer', function(configuration){
+            signalingSocket.on('addPeer', async function(configuration){
                 console.log('New peer being added to list', configuration)
                 const peerID = configuration.peer_id
                 // Establish RTCPeerConnection
-                peerConnection = new RTCPeerConnection(
-                    //  {"iceServers": ICE_SERVERS},
-                )
-                
-                peers[peerID] = peerConnection 
+                // PeerConnection is actually the 'other' peer
+                // And not me
+               
 
-                peerConnection.onicecandidate = function(event) {
-                        console.log('OnIceCandidate executing...')
-                        if (!event || !event.candidate) return
-                        console.log('Relaying ICE candidate', event)
-                            signalingSocket.emit('relayICEcandidate', {
-                                "peer_id": peerID,
-                                "ice_candidate": event.candidate
-                            })                        
-                    }
+                // peerConnection.onicecandidate = function(event) {
+                //         console.log('OnIceCandidate executing...')
+                //         if (!event || !event.candidate) return
+                //         console.log('Relaying ICE candidate', event)
+                //             signalingSocket.emit('relayICEcandidate', {
+                //                 "peer_id": peerID,
+                //                 "ice_candidate": event.candidate
+                //             })                        
+                //     }
                     
                     
                     if (configuration.should_create_offer) {
+                peerConnection = new RTCPeerConnection(
+                     {"iceServers": ICE_SERVERS},
+                )
+                peers[peerID] = peerConnection 
+                peerConnection.onicecandidate = ({candidate}) => {
+                    console.log('ONICECANDIDATE LOCAL', candidate)
+                    signalingSocket.emit('relayICEcandidate', {"peer_id": peerID, "ice_candidate": candidate})
+                }
                         LOCAL_CHANNEL = peerConnection.createDataChannel('TextChannel')
                         
                         LOCAL_CHANNEL.onopen = function(){
                             console.log('LOCAL DATACHANNEL OPEN')
                         }
-                        // Only one PEER makes an OFFER at a time
-                        console.log("Creating RTC offer to ", peerID) 
-                        // Create data channel for communication
-                        
-                            peerConnection.createOffer().then(function(offer){
-                                console.log('Creating offer to ', peerID)
-                                peerConnection.setLocalDescription(offer).then(
-                                    function(){
-                                    signalingSocket.emit('relaySessionDescription',{'peer_id': peerID, 'session_description': offer})
-                                    } )
-                            })
-                    
-                    
-                    }
-                    LOCAL_CHANNEL.onmessage = function(message){
+                        LOCAL_CHANNEL.onmessage = function(message){
                             console.log(JSON.stringify(message.data),'is the message')
                             addMessage(JSON.parse(message.data))
                         }
+                        // Create data channel for communication
+                        
+                        await peerConnection.setLocalDescription(await peerConnection.createOffer())
+                        console.log('OFFER CREATER!', peerConnection.localDescription)
+                        await signalingSocket.emit('relaySessionDescription',{'peer_id': peerID, 'session_description': peerConnection.localDescription})
+                    
+                    
+                    }
+
+                   
                     
 
             })
 
-            signalingSocket.on('sessionDescriptionFunction',  function(configuration) {
+
+            signalingSocket.on('sessionDescriptionFunction',  async function(configuration) {
                     console.log('Remote description received: ', configuration) 
                     const peerID = configuration.peer_id 
-                    const peer = peers[peerID] 
+                    // const peer = peers[peerID] 
                     const remoteDescription = configuration.session_description 
                     // console.log(configuration.session_description) 
 
-                    remotePeerConn = new RTCPeerConnection(
-                        //  {"iceServers": ICE_SERVERS}
+                   
+                    if(remoteDescription)
+                    {    
+                        if(remoteDescription.type == 'offer'){
+                            remotePeerConn = new RTCPeerConnection(
+                         {"iceServers": ICE_SERVERS}
                         )
-
-                    remotePeerConn.onicecandidate = function(event) {
-                        console.log('OnIceCandidate executing...')
-                        if (!event || !event.candidate) return
-                        console.log('Relaying ICE candidate', event)
-                            // Signaling server emit relayICECandidate function
-                            // signalingSocket.emit('relayICEcandidate', {
-                            //     'peer_id': peerID, 
-                            //     'ice_candidate': {
-                            //         'sdpMLineIndex': event.candidate.sdpMLineIndex,
-                            //         'candidate': event.candidate.candidate
-                            //     }
-                            // }) 
-                            signalingSocket.emit('relayICEcandidate', {
-                                "peer_id": peerID,
-                                "ice_candidate": event.candidate
-                            })
+                    peers[peerID] = remotePeerConn
+                    remotePeerConn.onicecandidate = async ({candidate}) => {
+                        console.log('ONICECANDIDATE REMOTE', candidate)
+                        await signalingSocket.emit('relayICEcandidate', {"peer_id": peerID, "ice_candidate": candidate})
                     }
+                    
                     remotePeerConn.ondatachannel = function(event){
+                        console.log('RECEIVED DATA CHANNEL REMOTE')
                         LOCAL_CHANNEL = event.channel
                         LOCAL_CHANNEL.onopen = function(){
                             console.log('RECEIVE DATACHANNEL OPEN')
@@ -164,27 +162,27 @@
                         }
                         remotePeerConn.channel = LOCAL_CHANNEL
                     }
-                    if(remoteDescription.type == 'offer'){
-                        remotePeerConn.setRemoteDescription(remoteDescription).then(()=> console.log('REMOTE DESCRIPTION RECEIVED AND SETTED', JSON.stringify(remoteDescription)))
-                        remotePeerConn.createAnswer().then(
-                            function(answer){
-                            remotePeerConn.setLocalDescription(answer).then(
-                                function(){
-                                signalingSocket.emit('relaySessionDescription', {'peer_id': peerID, 'session_description': answer})
-                                }
-                            )
-                        })
+                            await remotePeerConn.setRemoteDescription(remoteDescription)
+                            await remotePeerConn.setLocalDescription(await remotePeerConn.createAnswer())
+                            console.log('ANSWER CREATED', remotePeerConn.localDescription)
+                            await signalingSocket.emit('relaySessionDescription', {'peer_id': peerID, 'session_description': remotePeerConn.localDescription})
+                            
 
-                    }else if (remoteDescription.type == 'answer'){
-                        peerConnection.setRemoteDescription(remoteDescription).then(()=> console.log('REMOTE DESCRIPTION LOCAL ', remoteDescription))
+                        }else if (remoteDescription.type == 'answer'){
+                            console.log('THIS IS THE ANSWER', remoteDescription)
+
+                            await peerConnection.setRemoteDescription(remoteDescription)
+                        }
                     }
                 }) 
                 // Find the best way to get to another peer on the net
-                signalingSocket.on('iceCandidateFunction',  function(config) {
+                signalingSocket.on('iceCandidateFunction',  async function(config) {
+                    console.log('RECEIVED ICE CANDIDATE', config.ice_candidate)
                     const peer = peers[config.peer_id] 
                     const iceCandidate = config.ice_candidate 
-                    if(iceCandidate){
-                    peer.addIceCandidate(iceCandidate) 
+                    if(iceCandidate && peer.remoteDescription){
+                    await peer.addIceCandidate(iceCandidate) 
+                    console.log('ADDED CANDIDATE')
                     }
                 }) 
 
